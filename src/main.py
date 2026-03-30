@@ -8,6 +8,7 @@ from tqdm import tqdm
 from datetime import datetime
 import torch
 from rouge_score import rouge_scorer
+import wandb
 ROUGE = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'])
 
 
@@ -30,12 +31,14 @@ def get_args():
     # environment
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--out_dir', type=str, default="out/")
+    parser.add_argument('--no-wandb', dest='wandb', action='store_false', help="disable wandb logging")
+    parser.add_argument('--wandb_project', type=str, default="debate-or-vote")
 
     # data
-    parser.add_argument('--data_dir', type=str, default="/nobackup2/froilan/datasets/")
-    parser.add_argument('--data', type=str, default='')
+    parser.add_argument('--data_dir', type=str, default="")
+    parser.add_argument('--data', type=str, default='gsm8k', choices=['arithmetics','gsm8k','hellaswag','pro_medicine','formal_logic','csqa','hh_rlhf','cnn_daily'])
     parser.add_argument('--sub_data', type=str, default='')
-    parser.add_argument('--data_size', type=int, default=0)
+    parser.add_argument('--data_size', type=int, default=100)
     parser.add_argument('--split', type=str, default='train')
     parser.add_argument('--debug', action='store_true')
 
@@ -47,8 +50,8 @@ def get_args():
 
 
     # model
-    parser.add_argument('--model', type=str, default="llama3.1")
-    parser.add_argument('--model_dir', type=str, default="/nobackup2/froilan/models/")
+    parser.add_argument('--model', type=str, default="qwen2.5-7b")
+    parser.add_argument('--model_dir', type=str, default="")
     parser.add_argument('--memory_for_model_activations_in_gb', type=int, default=4)
     parser.add_argument('--verbose', action='store_true')
 
@@ -65,6 +68,8 @@ def get_args():
     parser.add_argument('--bae', action='store_true', help="base answer extractor")
     parser.add_argument('--cot', action='store_true')
 
+
+    parser.set_defaults(wandb=True)
 
     return parser.parse_args()
 
@@ -135,6 +140,16 @@ def get_new_message(args, sample, responses, personas=None, suffix=None):
 
 
 def main(args):
+
+    # Init wandb
+    if args.wandb:
+        nowtime = datetime.now().strftime("%m%d_%H%M")
+        wandb.init(
+            project=args.wandb_project,
+            name=f"{args.data}_{args.model}_{nowtime}",
+            config=vars(args),
+        )   
+
 
     # Load Agents
     agent, personas = get_agents(args)
@@ -289,6 +304,20 @@ def main(args):
         sample_responses.append(rounds_data_dict)
         iscorr_list.append(round_iscorr)
 
+        # Log per-sample metrics to wandb
+        if args.wandb:
+            if args.data in ['cnn_daily']:
+                for r_idx, rouges in enumerate(round_iscorr):
+                    wandb.log({f"sample_{i}/round_{r_idx}_rouge1": rouges[0],
+                               f"sample_{i}/round_{r_idx}_rouge2": rouges[1],
+                               f"sample_{i}/round_{r_idx}_rougeL": rouges[2]})
+            else:
+                log_dict = {}
+                for r_idx, corr in enumerate(round_iscorr):
+                    log_dict[f"Sample/round_{r_idx}_mean_acc"] = float(corr)
+                wandb.log(log_dict, commit=False)
+
+
         # Save to jsonl
         print(len(sample_responses))
         with open(f'out/history/{fname}.jsonl', 'w') as f:
@@ -307,12 +336,59 @@ def main(args):
             round_accs = (r1, r2, rL)
         else :
             round_accs = np.array(iscorr_list).mean(0)
+            log_dict = {}
             for i, acc in enumerate(round_accs) :
                 print(f'Round {i} Acc.: {acc:.4f}')
+                log_dict[f"Mean/round_{i}_mean_acc"] = float(acc)
+            wandb.log(log_dict, commit=True)
+        
+         # Build per-round case analysis tables
+        num_rounds = args.debate_rounds + 1  # round 0 ~ debate_rounds
+        tables = {r: wandb.Table(columns=["sample_idx", "question", "response", "debate_answer", "answer", "is_correct"])
+                  for r in range(num_rounds)}
+
+        for sample_idx, (rounds_data_dict, x) in enumerate(zip(sample_responses, test_X)):
+            for rid in range(num_rounds):
+                rd = rounds_data_dict.get(str(rid))
+                if rd is None:
+                    continue
+                if rd['debate_answer_iscorr']:  # skip correct cases, keep bad cases
+                    continue
+                if len(tables[rid].data) > 100:  # limit table size to 100 for better visualization
+                    continue
+
+                responses_text = "\n---\n".join(
+                    f"[{name.split('__')[-1]}] {resp}"
+                    for name, resp in rd['responses'].items()
+                )
+
+                tables[rid].add_data(
+                    sample_idx,
+                    x,
+                    responses_text,
+                    str(rd['debate_answer']),
+                    str(rd['answer']),
+                    bool(rd['debate_answer_iscorr']),
+                )
+        wandb.log({f"Cases/round_{r}": table for r, table in tables.items()}, commit=False)
     
     with open('out/logs.tsv', 'a') as f :
         line = f"\n{args.timestamp}\t{fname}\t{round_accs}"
         f.writelines(line)
+
+    # Log final summary metrics to wandb
+    if args.wandb:
+        if args.data in ['cnn_daily']:
+            wandb.summary['final_rouge1'] = round_accs[0]
+            wandb.summary['final_rouge2'] = round_accs[1]
+            wandb.summary['final_rougeL'] = round_accs[2]
+        else:
+            for r_idx, acc in enumerate(round_accs):
+                wandb.summary[f'round_{r_idx}_acc'] = float(acc)
+            wandb.summary['final_acc'] = float(round_accs[-1])
+
+
+        wandb.finish()
 
 
 

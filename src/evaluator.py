@@ -44,14 +44,65 @@ def get_instruction_suffix(args):
 def evaluate_arithmetics(responses, answer):
     # Returns True if corret, False if incorrect
     final_answers = []
-    for _, response in responses.items():
+    # for _, response in responses.items():
+    #     try:
+    #         # 1. 找第一种格式
+    #         pred_list = re.findall(r"\{final answer:\s*(.*?)\}", response)
 
-        try:
-            pred = re.findall(r"\{(.*?)\}", response)[-1]
-            pred = float(pred.replace("final answer:", "").strip())
-            final_answers.append(np.round(pred, 1))
-        except :
-            final_answers.append("")
+    #         # 2. 如果没找到，找第二种格式
+    #         if not pred_list:
+    #             pred_list = re.findall(r"\\boxed\{(.*?)\}", response)
+            
+    #         # 3. 如果两种都没找到，主动触发异常跳入 except
+    #         if not pred_list:
+    #             raise ValueError("No answer found")
+                
+    #         # 4. 安全地取最后一位，清理多余空格，并转为数字
+    #         pred_str = pred_list[-1]
+    #         pred_float = float(pred_str.strip())
+            
+    #         # 5. 四舍五入并存入结果
+    #         final_answers.append(np.round(pred_float, 1))
+        
+    #     except Exception as e:
+    #     # 无论是没找到，还是 float() 转换失败（例如提取出了字母），都存入空值
+    #     # print(f"解析失败: {e}") # 调试时可以打开这行，看看模型到底输出了什么奇葩格式
+    #         final_answers.append("")
+    import re
+import numpy as np
+
+final_answers = []
+for _, response in responses.items():
+    try:
+        # 1. 找第一种格式（加入了 \\? 来优雅地处理可能出现的反斜杠）
+        pred_list = re.findall(r"\\?\{final answer:\s*(.*?)\\?\}", response)
+
+        # 2. 如果没找到，找第二种格式
+        if not pred_list:
+            pred_list = re.findall(r"\\+boxed\s*\{\s*(.*?)\s*\}", response)
+        
+        # 3. 如果两种都没找到，主动触发异常跳入 except
+        if not pred_list:
+            raise ValueError("No answer found")
+            
+        # 4. 安全地取最后一位
+        pred_str = pred_list[-1]
+        
+        # --- 新增：稳健的文本清洗步骤 ---
+        # 移除可能残留的反斜杠、大括号，或者清理掉像 Agent 4 那样嵌套生成的额外文本
+        pred_str_clean = pred_str.replace('\\', '').replace('{', '').replace('}', '').strip()
+        if "final answer:" in pred_str_clean:
+            pred_str_clean = pred_str_clean.replace("final answer:", "").strip()
+        
+        # 5. 转换为浮点数
+        pred_float = float(pred_str_clean)
+        
+        # 6. 四舍五入并存入结果
+        final_answers.append(np.round(pred_float, 1))
+    
+    except Exception as e:
+        # print(f"解析失败: {e}") # 调试时可以打开，查看具体的报错内容
+        final_answers.append("")
 
 
     if len(set(final_answers)) == 1 and list(set(final_answers))[0] == "":

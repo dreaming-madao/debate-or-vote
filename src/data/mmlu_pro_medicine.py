@@ -26,7 +26,7 @@ import pandas as pd
 
 def load_data(args, split='validation'):
     split = 'validation' if split == 'train' else 'test'
-    dataset = load_dataset('cais/mmlu', 'professional_medicine', cache_dir=args.data_dir)[split]
+    dataset = load_dataset('cais/mmlu', 'professional_medicine')[split]
     dataset = pd.DataFrame(dataset)
     
     questions, labels = [], []

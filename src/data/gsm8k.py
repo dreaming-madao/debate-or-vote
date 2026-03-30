@@ -15,7 +15,7 @@ def extract_answer(full_ans_text: str) -> str:
 
 def load_data(args, split='validation'):
 
-    dataset = load_dataset('openai/gsm8k', 'main', cache_dir=args.data_dir)[split]
+    dataset = load_dataset('openai/gsm8k', 'main' )[split]
     dataset = pd.DataFrame(dataset)
     if split == 'train':
         dataset = dataset.sample(frac=1, random_state=0).reset_index(drop=True)

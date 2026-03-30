@@ -9,7 +9,7 @@ from data.data_utils import *
 
 def load_data(args, split):
 
-    dataset = load_dataset('Anthropic/hh-rlhf', cache_dir=args.data_dir)[split]
+    dataset = load_dataset('Anthropic/hh-rlhf')[split]
     dataset = pd.DataFrame(dataset)
     dataset = dataset.sample(frac=1, random_state=0).reset_index(drop=True).head(args.data_size)
     

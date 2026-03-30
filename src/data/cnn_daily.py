@@ -5,7 +5,7 @@ import pandas as pd
 
 def load_data(args, split='validation'):
     split = 'test' if split == 'test' else 'validation'
-    dataset = load_dataset('abisee/cnn_dailymail', '3.0.0', cache_dir=args.data_dir)[split]
+    dataset = load_dataset('abisee/cnn_dailymail', '3.0.0')[split]
     dataset = pd.DataFrame(dataset)
     if split == 'train':
         dataset = dataset.sample(frac=1, random_state=0).reset_index(drop=True).head(args.data_size)

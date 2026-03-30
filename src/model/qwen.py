@@ -12,7 +12,7 @@ from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, DataCo
 def load_model(args, model_name_or_path, memory_for_model_activations_in_gb=2, peft_path=None):
     
     config = AutoConfig.from_pretrained(model_name_or_path, token=args.token)
-    model = AutoModelForCausalLM.from_pretrained(model_name_or_path, torch_dtype=torch.float16, device_map="auto", token=args.token, cache_dir=args.model_dir)
+    model = AutoModelForCausalLM.from_pretrained(model_name_or_path, torch_dtype=torch.float16, device_map="auto")
     
     return model
 
@@ -27,7 +27,7 @@ class QwenWrapper(object):
         super(QwenWrapper, self).__init__()
         self.name = model_dir
         self.huggingface_model = load_model(args, model_dir, memory_for_model_activations_in_gb, lora_adapter_path)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_dir, token=args.token)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_dir)
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = 'left'
 

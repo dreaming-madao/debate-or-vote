@@ -27,6 +27,7 @@ def engine(messages, agent, num_agents=1, stop_sequences=None):
         output_scores=True,
         do_sample=True,
         temperature=1.0,
+        repetition_penalty=1.1,
         top_p=0.9,
         num_return_sequences=1,
         return_legacy_cache=True

@@ -1,2 +1,6 @@
 out/
 token
+wandb/
+.locks/
+*.locks
+.vscode/

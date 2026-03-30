@@ -14,10 +14,10 @@ def load_model(args, model_name_or_path, memory_for_model_activations_in_gb=2, p
     config = AutoConfig.from_pretrained(model_name_or_path, token=args.token)
     print(f"{model_name_or_path=}")
     if llama_version == 3:
-        model = AutoModelForCausalLM.from_pretrained(model_name_or_path, torch_dtype=torch.float16, device_map="auto", token=args.token, cache_dir=args.model_dir)
+        model = AutoModelForCausalLM.from_pretrained(model_name_or_path, torch_dtype=torch.float16, device_map="auto")
     elif llama_version == 2:
         # llama 2 must be loaded in bf16 with flash attention otherwise activations could go out of range and generate nans
-        model = AutoModelForCausalLM.from_pretrained(model_name_or_path, torch_dtype=torch.bfloat16, device_map="auto", token=args.token, cache_dir=args.model_dir, attn_implementation="flash_attention_2")
+        model = AutoModelForCausalLM.from_pretrained(model_name_or_path, torch_dtype=torch.bfloat16, device_map="auto", attn_implementation="flash_attention_2")
     
     return model
 
@@ -32,7 +32,7 @@ class LlamaWrapper(object):
         super(LlamaWrapper, self).__init__()
         self.name = model_dir
         self.huggingface_model = load_model(args, model_dir, memory_for_model_activations_in_gb, lora_adapter_path, llama_version)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_dir, token=args.token)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_dir)
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = 'left'
 
