@@ -23,6 +23,36 @@ def convert_numpy(obj):
         return obj.item()
     raise TypeError(f"Type {type(obj)} not serializable")
 
+def save_bad_case(args, tables, rounds_data_dict, sample_idx, x):
+    num_rounds = args.debate_rounds + 1
+    flag = True
+    for rid in range(num_rounds):
+        rd = rounds_data_dict.get(str(rid))
+        if rd is None:
+            continue
+        if not rd['debate_answer_iscorr']:  # skip correct cases, keep bad cases
+            flag = True
+            break
+    if flag:
+        for rid in range(num_rounds):
+            rd = rounds_data_dict.get(str(rid))
+
+            responses_text = "\n---\n".join(
+                f"[{name.split('__')[-1]}] {resp}"
+                for name, resp in rd['responses'].items()
+            )
+
+            tables[rid].add_data(
+                sample_idx,
+                x,
+                responses_text,
+                str(rd['debate_answer']),
+                str(rd['answer']),
+                bool(rd['debate_answer_iscorr']),
+            )
+        pass  # table will be logged once after all samples are processed
+
+
 
 def get_args():
 
@@ -193,6 +223,8 @@ def main(args):
     # Debate
     sample_responses = []
     iscorr_list = []
+    bad_case_tables = {r: wandb.Table(columns=["sample_idx", "question", "response", "debate_answer", "answer", "is_correct"])
+                       for r in range(args.debate_rounds + 1)}
 
 
     for i, (x, y) in tqdm(enumerate(zip(test_X, test_Y)), total=len(test_X)):
@@ -340,37 +372,9 @@ def main(args):
             for i, acc in enumerate(round_accs) :
                 print(f'Round {i} Acc.: {acc:.4f}')
                 log_dict[f"Mean/round_{i}_mean_acc"] = float(acc)
-            wandb.log(log_dict, commit=True)
+            save_bad_case(args, bad_case_tables, sample_responses[-1], i, x)     # table 是否每次初始化有问题
+            wandb.log(log_dict, commit=True)   
         
-         # Build per-round case analysis tables
-        num_rounds = args.debate_rounds + 1  # round 0 ~ debate_rounds
-        tables = {r: wandb.Table(columns=["sample_idx", "question", "response", "debate_answer", "answer", "is_correct"])
-                  for r in range(num_rounds)}
-
-        for sample_idx, (rounds_data_dict, x) in enumerate(zip(sample_responses, test_X)):
-            for rid in range(num_rounds):
-                rd = rounds_data_dict.get(str(rid))
-                if rd is None:
-                    continue
-                if rd['debate_answer_iscorr']:  # skip correct cases, keep bad cases
-                    continue
-                if len(tables[rid].data) > 100:  # limit table size to 100 for better visualization
-                    continue
-
-                responses_text = "\n---\n".join(
-                    f"[{name.split('__')[-1]}] {resp}"
-                    for name, resp in rd['responses'].items()
-                )
-
-                tables[rid].add_data(
-                    sample_idx,
-                    x,
-                    responses_text,
-                    str(rd['debate_answer']),
-                    str(rd['answer']),
-                    bool(rd['debate_answer_iscorr']),
-                )
-        wandb.log({f"Cases/round_{r}": table for r, table in tables.items()}, commit=False)
     
     with open('out/logs.tsv', 'a') as f :
         line = f"\n{args.timestamp}\t{fname}\t{round_accs}"
@@ -388,6 +392,7 @@ def main(args):
             wandb.summary['final_acc'] = float(round_accs[-1])
 
 
+        wandb.log({f"Cases/round_{r}": table for r, table in bad_case_tables.items()})
         wandb.finish()
 
 

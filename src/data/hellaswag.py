@@ -10,7 +10,7 @@ def load_data(args, split='validation'):
     if split == 'train':
         dataset = dataset.sample(frac=1, random_state=0).reset_index(drop=True).head(args.data_size)
     else :
-        dataset = dataset.sample(frac=1, random_state=0).reset_index(drop=True).head(300)
+        dataset = dataset.sample(frac=1, random_state=0).reset_index(drop=True)[3:6]
 
     questions, labels = [], []
     choices = "ABCD"
