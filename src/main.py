@@ -25,7 +25,7 @@ def convert_numpy(obj):
 
 def save_bad_case(args, tables, rounds_data_dict, sample_idx, x):
     num_rounds = args.debate_rounds + 1
-    flag = True
+    flag = False
     for rid in range(num_rounds):
         rd = rounds_data_dict.get(str(rid))
         if rd is None:
@@ -33,6 +33,10 @@ def save_bad_case(args, tables, rounds_data_dict, sample_idx, x):
         if not rd['debate_answer_iscorr']:  # skip correct cases, keep bad cases
             flag = True
             break
+
+    if len(tables[0].data) >= 100:  # limit the number of bad cases to log
+        flag = False
+
     if flag:
         for rid in range(num_rounds):
             rd = rounds_data_dict.get(str(rid))
